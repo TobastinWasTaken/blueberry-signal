@@ -7,6 +7,7 @@ public class ShipMovementPhysics : MonoBehaviour
 {
     CharacterController moveComponent;
     PlayerInput input;
+    Rigidbody body;
 
     [SerializeField]
     Vector3 shipVelocity;
@@ -19,7 +20,8 @@ public class ShipMovementPhysics : MonoBehaviour
         groundFrictionMultiplier = 0.1f,
         slideFrictionMultiplier = 0.8f,
         turnSpeedMultiplier = 10f,
-        turnFrictionMultiplier = 0.7f;
+        turnFrictionMultiplier = 0.7f,
+        moveSpeedMaximum = 10f;
 
     [SerializeField]
     float
@@ -38,7 +40,8 @@ public class ShipMovementPhysics : MonoBehaviour
 
     private void Awake()
     {
-        moveComponent = GetComponent<CharacterController>();
+        //moveComponent = GetComponent<CharacterController>();
+        body = GetComponent<Rigidbody>();
         input = GetComponent<PlayerInput>();
     }
 
@@ -51,6 +54,8 @@ public class ShipMovementPhysics : MonoBehaviour
     // Update is called once per frame
     void FixedUpdate()
     {
+        //shipVelocity = Vector3.zero;
+
         switch (shipDriveMode)
         {
             case DriveMode.Ground:
@@ -66,18 +71,18 @@ public class ShipMovementPhysics : MonoBehaviour
 
     void GroundDrive()
     {
-        Vector3 accelVec = CalculateAcceleration();
         float rotVal = CalculateTurn();
 
         // Rotate the vehicle
         shipAngularMomentum += rotVal;
         // Dampen the rotation
-        shipAngularMomentum *= (1 - (turnFrictionMultiplier * Time.deltaTime));
+        shipAngularMomentum *= turnFrictionMultiplier;
 
         // Accelerate the vehicle
-        shipVelocity += accelVec;
-        // Decelerate the vehicle
-        shipVelocity *= ApplyFriction();
+        if (shipVelocity.magnitude < moveSpeedMaximum)
+            shipVelocity += AddAcceleration();
+        // Decelerate the vehicle via friction
+        shipVelocity += AddWheelFriction();
         // Apply gravity
         //shipVelocity += Vector3.down * ApplyGravity();
     }
@@ -113,7 +118,7 @@ public class ShipMovementPhysics : MonoBehaviour
         return gravityMultiplier * Time.deltaTime;
     }
 
-    Vector3 CalculateAcceleration()
+    Vector3 AddAcceleration()
     {
         return transform.forward * moveSpeedMultiplier * acceleratorInput * Time.deltaTime;
     }
@@ -123,24 +128,81 @@ public class ShipMovementPhysics : MonoBehaviour
         return steerInput.x * turnSpeedMultiplier * Time.deltaTime;
     }
 
-    float ApplyFriction()
+    Vector3 ApplyFriction()
     {
         Debug.Log(Mathf.Abs(Vector3.Angle(transform.forward, shipVelocity)));
         Debug.DrawRay(transform.position, transform.forward, Color.red);
         Debug.DrawRay(transform.position, shipVelocity, Color.blue);
 
-        // TODO: Look at angle between move speed and facing speed, and change the friction based on that
-        if (Mathf.Abs(Vector3.Angle(transform.forward, shipVelocity)) > driftAngle)
+        // Scale of the ship's current velocity
+        float mag = shipVelocity.magnitude;
+        // frictionVec: Wheels' turning slowing down. 180deg from forward direction. Proportional to move speed
+        Vector3 frictionVec = transform.forward * mag * groundFrictionMultiplier * -1f;
+        // slideFrictionVec: Wheels skidding against the ground, slowing the ship down. 180deg from moving direction
+        Vector3 slideFrictionVec = shipVelocity * slideFrictionMultiplier * -1f;
+
+        // Look at angle between move speed and facing speed, and if it's above a threshold, add some additional friction to slow down the ship faster
+        if (Mathf.Abs(Vector3.Angle(transform.forward, shipVelocity)) < driftAngle)
         {
-            return 1f - slideFrictionMultiplier * Time.deltaTime;
+            slideFrictionVec = Vector3.zero;
         }
 
-        return 1f - groundFrictionMultiplier * Time.deltaTime;
+        // If the ship is moving more backwards than forwards, invert the ground friction
+        if (Mathf.Abs(Vector3.Angle(transform.forward, shipVelocity)) > 90f)
+        {
+            frictionVec *= -1f;
+        }
+
+        // Add the vectors together
+        return (frictionVec + slideFrictionVec) * Time.deltaTime;
+    }
+
+    Vector3 AddWheelFriction()
+    {
+        Vector3 forwardFriction = transform.forward;
+        Vector3 lateralFriction = transform.right;
+
+        float angle = Vector3.SignedAngle(transform.forward, shipVelocity, Vector3.up);
+
+        // Add or subtract velocity for each direction, based on the size of the angle
+        Debug.Log(angle);
+
+        Vector3 frictionVelocityAdd = Vector3.zero;
+
+        // Angle > 0: Apply force to the left
+        if (angle > 0f)
+        {
+            frictionVelocityAdd -= lateralFriction * slideFrictionMultiplier * Time.deltaTime;
+        }
+        // Angle < 0: Apply force to the right
+        if (angle < 0f)
+        {
+            frictionVelocityAdd += lateralFriction * slideFrictionMultiplier * Time.deltaTime;
+        }
+
+        float unsignedAngle = Mathf.Abs(angle);
+
+        // Moving forward: Apply backward friction
+        if (unsignedAngle < 90)
+        {
+            frictionVelocityAdd -= forwardFriction * groundFrictionMultiplier * Time.deltaTime;
+        }
+        else
+        {
+            frictionVelocityAdd += forwardFriction * groundFrictionMultiplier * Time.deltaTime;
+        }
+
+        return frictionVelocityAdd;
     }
 
     void MoveShip(Vector3 vec, float turn)
     {
-        moveComponent.Move(vec * moveSpeedMultiplier * Time.deltaTime);
-        transform.Rotate(transform.up * turn * Time.deltaTime);
+        //moveComponent.Move(vec * moveSpeedMultiplier * Time.deltaTime);
+
+        body.AddForce(vec, ForceMode.Force);
+
+        Vector3 torque = Vector3.up * turn;
+
+        body.AddRelativeTorque(torque);
     }
 }
