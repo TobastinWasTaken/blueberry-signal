@@ -134,6 +134,7 @@ GameObject:
   - component: {fileID: 11370228}
   - component: {fileID: 11370230}
   - component: {fileID: 11370229}
+  - component: {fileID: 11370231}
   m_Layer: 0
   m_Name: SuspensionShip
   m_TagString: Untagged
@@ -156,6 +157,8 @@ Transform:
   m_Children:
   - {fileID: 1900473321}
   - {fileID: 636532934}
+  - {fileID: 2051959520}
+  - {fileID: 18817106}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &11370229
@@ -179,11 +182,60 @@ MonoBehaviour:
   drivableMask:
     serializedVersion: 2
     m_Bits: 8
+  input: {fileID: 11370231}
+  accelerationPoint: {fileID: 2051959520}
   springStiffness: 30000
   damperStiffness: 3000
   restLength: 1
   springTravel: 0.5
   wheelRadius: 0.33
+  acceleration: 25
+  deceleration: 10
+  maxSpeed: 100
+  steerStrength: 30
+  turningCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 2
+      outSlope: 2
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.073783
+      value: 0.4323103
+      inSlope: 2.1862714
+      outSlope: 2.1862714
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 0.5699971
+      value: 0.945579
+      inSlope: 0.14542884
+      outSlope: 0.14542884
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.7660807
+      outWeight: 0.41925445
+    - serializedVersion: 3
+      time: 0.9958191
+      value: 0.8231125
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  dragCoefficient: 1
 --- !u!54 &11370230
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -193,8 +245,8 @@ Rigidbody:
   m_GameObject: {fileID: 11370227}
   serializedVersion: 4
   m_Mass: 1000
-  m_Drag: 0
-  m_AngularDrag: 0.05
+  m_Drag: 0.2
+  m_AngularDrag: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -211,6 +263,112 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &11370231
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 11370227}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Actions: {fileID: -944628639613478452, guid: 278baadd81cea94488193371084f65f9, type: 3}
+  m_NotificationBehavior: 2
+  m_UIInputModule: {fileID: 0}
+  m_DeviceLostEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_DeviceRegainedEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ControlsChangedEvent:
+    m_PersistentCalls:
+      m_Calls: []
+  m_ActionEvents:
+  - m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 11370229}
+        m_TargetAssemblyTypeName: SuShipController, Assembly-CSharp
+        m_MethodName: SteerInput
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+    m_ActionId: 2eb93cca-dc56-4882-87e1-99ec08adb287
+    m_ActionName: Player/Steer[/Keyboard/w,/Keyboard/upArrow,/Keyboard/s,/Keyboard/downArrow,/Keyboard/a,/Keyboard/leftArrow,/Keyboard/d,/Keyboard/rightArrow]
+  - m_PersistentCalls:
+      m_Calls:
+      - m_Target: {fileID: 11370229}
+        m_TargetAssemblyTypeName: SuShipController, Assembly-CSharp
+        m_MethodName: AccelerateInput
+        m_Mode: 0
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
+    m_ActionId: 5eb689c2-e457-445f-9329-b28aed74c63a
+    m_ActionName: Player/Accelerate[/Keyboard/w]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 33e111b2-c8a9-42fd-a2fe-3fbad3b190bb
+    m_ActionName: Player/Hover[/Keyboard/leftShift]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: bd1697bb-e487-47a3-89fe-8a30f77c9f78
+    m_ActionName: UI/Navigate[/Keyboard/w,/Keyboard/upArrow,/Keyboard/s,/Keyboard/downArrow,/Keyboard/a,/Keyboard/leftArrow,/Keyboard/d,/Keyboard/rightArrow]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 8aa340c3-1638-4d57-9d97-1a1c7723380a
+    m_ActionName: UI/Submit[/Keyboard/enter]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 3c65c2bd-b227-4e0f-921a-05ccf9783b00
+    m_ActionName: UI/Cancel[/Keyboard/escape]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: facf2390-a511-4078-b29f-effdf20d58dd
+    m_ActionName: UI/Point[/Mouse/position]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 2feeb705-e5cc-4d2b-997a-fa5c0cd3e076
+    m_ActionName: UI/Click[/Mouse/leftButton]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 02d491c5-674b-4477-93ab-c2314dd5d575
+    m_ActionName: UI/ScrollWheel[/Mouse/scroll]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 2274ce44-4aec-46ea-89be-46dc7cc99640
+    m_ActionName: UI/MiddleClick[/Mouse/middleButton]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 7b7e79a1-b856-47f2-aa1a-30f342b767f8
+    m_ActionName: UI/RightClick[/Mouse/rightButton]
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: c96a4051-37f4-4904-b4d2-f84e352f6836
+    m_ActionName: UI/TrackedDevicePosition
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 76f7a638-3c95-4af4-bd41-b4ba22a93f27
+    m_ActionName: UI/TrackedDeviceOrientation
+  m_NeverAutoSwitchControlSchemes: 0
+  m_DefaultControlScheme: 
+  m_DefaultActionMap: Player
+  m_SplitScreenIndex: -1
+  m_Camera: {fileID: 0}
 --- !u!1 &18817105
 GameObject:
   m_ObjectHideFlags: 0
@@ -236,12 +394,12 @@ Transform:
   m_GameObject: {fileID: 18817105}
   serializedVersion: 2
   m_LocalRotation: {x: 0.13052616, y: -0, z: -0, w: 0.9914449}
-  m_LocalPosition: {x: 0, y: 5.5, z: -9}
+  m_LocalPosition: {x: 0, y: 4.5, z: -9}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 963194228}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 11370228}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &64275201
 GameObject:
@@ -2337,7 +2495,7 @@ Transform:
   m_GameObject: {fileID: 1946095813}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7879877, y: 0.29860008, z: -0.3299623, w: 0.42548597}
-  m_LocalPosition: {x: 29.4, y: 0, z: 163.9}
+  m_LocalPosition: {x: 69.2, y: 0, z: 165.5}
   m_LocalScale: {x: 52.835564, y: 52.835564, z: 52.835564}
   m_ConstrainProportionsScale: 1
   m_Children: []
@@ -2414,6 +2572,37 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1946095813}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &2051959519
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2051959520}
+  m_Layer: 0
+  m_Name: Acceleration Point
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2051959520
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2051959519}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0.341, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 11370228}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2421,6 +2610,5 @@ SceneRoots:
   - {fileID: 705507995}
   - {fileID: 634026218}
   - {fileID: 704171534}
-  - {fileID: 18817106}
   - {fileID: 11370228}
   - {fileID: 1165325350}
