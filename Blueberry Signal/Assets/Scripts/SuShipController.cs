@@ -13,6 +13,10 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private LayerMask drivableMask;
     [SerializeField] private PlayerInput input;
     [SerializeField] private Transform accelerationPoint;
+    [SerializeField] private GameObject[] tireModels = new GameObject[4];
+    [SerializeField] private GameObject[] frontTireParents = new GameObject[2];
+    [SerializeField] private TrailRenderer[] rearSkidMarks = new TrailRenderer[2];
+    [SerializeField] private ParticleSystem[] rearSkidSmokes = new ParticleSystem[2];
 
     [Header("Suspension Settings")]
     [SerializeField] private float springStiffness;
@@ -43,9 +47,14 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private float steerStrength = 15f;
     [SerializeField] private AnimationCurve turningCurve;
     [SerializeField] private float dragCoefficient = 1f;
+    [SerializeField] private float minSkidSideVelocity = 10f;
 
     private Vector3 currentCarLocalVelocity = Vector3.zero;
     private float carVelocityRatio = 0;
+
+    [Header("Visuals")]
+    [SerializeField] float tireRotSpeed = 3000f;
+    [SerializeField] float maxSteeringAngle = 30f;
 
     #region Unity Functions
 
@@ -60,6 +69,7 @@ public class SuShipController : MonoBehaviour
         GroundCheck();
         CalculateCarVelocity();
         Movement();
+        Visuals();
     }
 
     #endregion
@@ -101,6 +111,41 @@ public class SuShipController : MonoBehaviour
         Vector3 dragForce = dragMagnitude * transform.right;
 
         carRB.AddForceAtPosition(dragForce, accelerationPoint.position, ForceMode.Acceleration);
+    }
+
+    #endregion
+
+    #region Visuals
+
+    private void Visuals()
+    {
+        TireVisuals();
+    }
+
+    private void TireVisuals()
+    {
+        float steeringAngle = steerInput * maxSteeringAngle;
+
+        for(int i = 0; i < tireModels.Length; i++)
+        {
+            // Front tires
+
+            if (i < 2)
+            {
+                tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * carVelocityRatio * Time.deltaTime, Space.Self);
+
+                frontTireParents[i].transform.localEulerAngles = new Vector3(frontTireParents[i].transform.localEulerAngles.x, steeringAngle, frontTireParents[i].transform.localEulerAngles.x);
+            }
+            else
+            {
+                tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * accelInput * Time.deltaTime, Space.Self);
+            }
+        }
+    }
+
+    private void SetTirePosition(GameObject tire, Vector3 targetPosition)
+    {
+        tire.transform.position = targetPosition;
     }
 
     #endregion
@@ -185,11 +230,24 @@ public class SuShipController : MonoBehaviour
 
                 carRB.AddForceAtPosition(netForce * rayPoints[i].up, rayPoints[i].position);
 
+                // Visuals
+
+                SetTirePosition(tireModels[i], hit.point + rayPoints[i].up * wheelRadius);
+
+                // Debug
+
                 Debug.DrawLine(rayPoints[i].position, hit.point, Color.red);
             }
             else
             {
                 wheelsIsGrounded[i] = 0;
+
+                // Visuals
+
+                SetTirePosition(tireModels[i], rayPoints[i].position - rayPoints[i].up * maxLength);
+
+                // Debug
+
                 Debug.DrawLine(rayPoints[i].position, rayPoints[i].position + (wheelRadius * maxLength) * -rayPoints[i].up, Color.green);
             }
         }
