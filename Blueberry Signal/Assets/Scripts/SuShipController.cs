@@ -139,6 +139,7 @@ public class SuShipController : MonoBehaviour
             else
             {
                 tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * accelInput * Time.deltaTime, Space.Self);
+                Debug.Log("Accel input: " + accelInput);
             }
         }
     }
