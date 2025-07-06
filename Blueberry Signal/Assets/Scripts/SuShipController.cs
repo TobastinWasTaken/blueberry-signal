@@ -39,6 +39,7 @@ public class SuShipController : MonoBehaviour
     [Header("Input")]
     private float accelInput = 0;
     private float steerInput = 0;
+    private float boostInput = 0;
 
     [Header("Car Settings")]
     [SerializeField] private float acceleration = 25f;
@@ -51,8 +52,19 @@ public class SuShipController : MonoBehaviour
 
     private Vector3 currentCarLocalVelocity = Vector3.zero;
     private float carVelocityRatio = 0;
+    private float carSkidVelocityRatio = 0;
+
+    [Header("Power Slide")]
+    [SerializeField] private float powerBoostChargeSpeed = 0.2f;
+    [SerializeField] private float powerBoostDepleteSpeed = 0.5f;
+    [SerializeField] private float powerBoostAcceleration = 10f;
+
+    private bool carIsPowerSliding = false;
+    private float carBoostTimer = 0f;
+    private float powerBoostChargeLevel = 0f;
 
     [Header("Visuals")]
+    [SerializeField] float tirePositionLerpAmt = 0.5f;
     [SerializeField] float tireRotSpeed = 3000f;
     [SerializeField] float maxSteeringAngle = 30f;
 
@@ -69,6 +81,7 @@ public class SuShipController : MonoBehaviour
         GroundCheck();
         CalculateCarVelocity();
         Movement();
+        CalculatePowerSlide();
         Visuals();
     }
 
@@ -83,6 +96,7 @@ public class SuShipController : MonoBehaviour
             Acceleration();
             Deceleration();
             Turn();
+            Boost();
             SidewaysDrag();
         }
     }
@@ -102,15 +116,65 @@ public class SuShipController : MonoBehaviour
         carRB.AddRelativeTorque(steerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * carRB.transform.up, ForceMode.Acceleration);
     }
 
+    private void Boost()
+    {
+        carBoostTimer = 1 * boostInput;
+
+        if (carBoostTimer > 0 && powerBoostChargeLevel > 0)
+        {
+            carRB.AddForceAtPosition(powerBoostAcceleration * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
+        }
+    }
+
     private void SidewaysDrag()
     {
         float currentSidewaysSpeed = currentCarLocalVelocity.x;
+
+        if (isGrounded && Mathf.Abs(currentSidewaysSpeed) > minSkidSideVelocity)
+        {
+            // Begin power slide
+            PowerSlideToggler(true);
+        }
+        else
+        {
+            // End power slide
+            PowerSlideToggler(false);
+        }
 
         float dragMagnitude = -currentSidewaysSpeed * dragCoefficient;
 
         Vector3 dragForce = dragMagnitude * transform.right;
 
         carRB.AddForceAtPosition(dragForce, accelerationPoint.position, ForceMode.Acceleration);
+    }
+
+    #endregion
+
+    #region Power Sliding
+
+    private void PowerSlideToggler(bool powerSliding)
+    {
+        if (carIsPowerSliding == powerSliding)
+            return;
+
+        carIsPowerSliding = powerSliding;
+    }
+
+    private void CalculatePowerSlide()
+    {
+        if (carIsPowerSliding)
+        {
+            powerBoostChargeLevel += Mathf.Abs(powerBoostChargeSpeed * carSkidVelocityRatio * Time.deltaTime);
+        }
+
+        if (carBoostTimer > 0)
+        {
+            carBoostTimer -= Time.deltaTime;
+            powerBoostChargeLevel -= powerBoostDepleteSpeed * Time.deltaTime;
+        }
+
+        powerBoostChargeLevel = Mathf.Clamp01(powerBoostChargeLevel);
+        Debug.Log("Power Boost Charge: " + powerBoostChargeLevel);
     }
 
     #endregion
@@ -139,14 +203,13 @@ public class SuShipController : MonoBehaviour
             else
             {
                 tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * accelInput * Time.deltaTime, Space.Self);
-                Debug.Log("Accel input: " + accelInput);
             }
         }
     }
 
     private void SetTirePosition(GameObject tire, Vector3 targetPosition)
     {
-        tire.transform.position = targetPosition;
+        tire.transform.position = Vector3.Lerp(tire.transform.position, targetPosition, tirePositionLerpAmt);
     }
 
     #endregion
@@ -176,6 +239,7 @@ public class SuShipController : MonoBehaviour
     {
         currentCarLocalVelocity = transform.InverseTransformDirection(carRB.velocity);
         carVelocityRatio = currentCarLocalVelocity.z / maxSpeed;
+        carSkidVelocityRatio = currentCarLocalVelocity.x / maxSpeed;
     }
 
     #endregion
@@ -201,6 +265,21 @@ public class SuShipController : MonoBehaviour
     {
         float f = context.ReadValue<Vector2>().x;
         steerInput = f;
+    }
+
+    public void BoostInput(InputAction.CallbackContext context)
+    {
+        if (context.started)
+        {
+            boostInput = 1f;
+            return;
+        }
+
+        if (context.canceled)
+        {
+            boostInput = 0f;
+            return;
+        }
     }
 
     #endregion
