@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Cinemachine;
 
 public class SuShipController : MonoBehaviour
 {
@@ -15,8 +16,12 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private Transform accelerationPoint;
     [SerializeField] private GameObject[] tireModels = new GameObject[4];
     [SerializeField] private GameObject[] frontTireParents = new GameObject[2];
+    [SerializeField] private GameObject[] tirePivots = new GameObject[4];
+    [SerializeField] private GameObject[] chargeMeters = new GameObject[2];
+    [SerializeField] private GameObject[] tireLightnings = new GameObject[2];
     [SerializeField] private TrailRenderer[] rearSkidMarks = new TrailRenderer[2];
     [SerializeField] private ParticleSystem[] rearSkidSmokes = new ParticleSystem[2];
+    [SerializeField] private CinemachineVirtualCamera carCam;
 
     [Header("Suspension Settings")]
     [SerializeField] private float springStiffness;
@@ -39,9 +44,10 @@ public class SuShipController : MonoBehaviour
     [Header("Input")]
     private float accelInput = 0;
     private float steerInput = 0;
-    private float boostInput = 0;
+    private float hoverInput = 0;
 
     [Header("Car Settings")]
+    [SerializeField] private float rbDrag = 0.2f;
     [SerializeField] private float acceleration = 25f;
     [SerializeField] private float deceleration = 10f;
     [SerializeField] private float maxSpeed = 100f;
@@ -51,28 +57,43 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private float minSkidSideVelocity = 10f;
 
     private Vector3 currentCarLocalVelocity = Vector3.zero;
+    private Vector3 currentCarLocalAcceleration = Vector3.zero;
     private float carVelocityRatio = 0;
     private float carSkidVelocityRatio = 0;
 
     [Header("Power Slide")]
+    [SerializeField] private float wheelStaticBuildupSpeed = 0.2f;
     [SerializeField] private float powerBoostChargeSpeed = 0.2f;
     [SerializeField] private float powerBoostDepleteSpeed = 0.5f;
     [SerializeField] private float powerBoostAcceleration = 10f;
+    [SerializeField] private float boostRealignChargeThreshold = 0.15f;
 
     private bool carIsPowerSliding = false;
-    private float carBoostTimer = 0f;
+    private float wheelStaticBuildupLevel = 0f;
     private float powerBoostChargeLevel = 0f;
+
+    [Header("Hovering")]
+    private bool carIsHovering = false;
 
     [Header("Visuals")]
     [SerializeField] float tirePositionLerpAmt = 0.5f;
     [SerializeField] float tireRotSpeed = 3000f;
     [SerializeField] float maxSteeringAngle = 30f;
+    [SerializeField] float cameraAccelFOVModifier = 0f;
+
+    [Header("Camera")]
+    [SerializeField] float baseCamFOV = 60f;
+    [SerializeField] float FOVMultiplier = 1f;
+    [SerializeField] float maxFOV = 90f;
+    [SerializeField] float minFOV = 45f;
+    [SerializeField] float FOVSetting = 1f;
 
     #region Unity Functions
 
-    private void Start()
+    private void Awake()
     {
         carRB = GetComponent<Rigidbody>();
+        carRB.drag = rbDrag;
     }
 
     private void FixedUpdate()
@@ -96,38 +117,67 @@ public class SuShipController : MonoBehaviour
             Acceleration();
             Deceleration();
             Turn();
-            Boost();
+            Hover();
             SidewaysDrag();
         }
     }
 
     private void Acceleration()
     {
+        if (carIsHovering)
+            return;
+
         carRB.AddForceAtPosition(acceleration * accelInput * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
     }
 
     private void Deceleration()
     {
+        if (carIsHovering)
+            return;
+
         carRB.AddForceAtPosition(deceleration * accelInput * -transform.forward, accelerationPoint.position, ForceMode.Acceleration);
     }
 
     private void Turn()
     {
-        carRB.AddRelativeTorque(steerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * carRB.transform.up, ForceMode.Acceleration);
+        if (carIsHovering)
+            carRB.AddRelativeTorque(steerStrength * steerInput * carRB.transform.up, ForceMode.Acceleration);
+        else
+            carRB.AddRelativeTorque(steerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * carRB.transform.up, ForceMode.Acceleration);
     }
 
-    private void Boost()
+    private void Hover()
     {
-        carBoostTimer = 1 * boostInput;
+        HoverToggle(hoverInput == 1f);
 
-        if (carBoostTimer > 0 && powerBoostChargeLevel > 0)
+        if (!carIsHovering && powerBoostChargeLevel > 0)
         {
+            if (powerBoostChargeLevel > boostRealignChargeThreshold)
+            {
+                // Re-orient the car's velocity if the charge level is greater than the threshold
+                Vector3 newVelocity = transform.forward;
+                float magnitude = currentCarLocalVelocity.magnitude;
+
+                carRB.velocity = newVelocity * magnitude;
+            }
+            else if (currentCarLocalVelocity.z < 0)
+            {
+                // Zero out the z velocity if the car is moving relatively backwards
+                Vector3 newVelocity = currentCarLocalVelocity;
+                newVelocity.z = 0f;
+
+                carRB.velocity = transform.TransformDirection(newVelocity);
+            }
+
             carRB.AddForceAtPosition(powerBoostAcceleration * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
         }
     }
 
     private void SidewaysDrag()
     {
+        if (carIsHovering)
+            return;
+
         float currentSidewaysSpeed = currentCarLocalVelocity.x;
 
         if (isGrounded && Mathf.Abs(currentSidewaysSpeed) > minSkidSideVelocity)
@@ -150,6 +200,43 @@ public class SuShipController : MonoBehaviour
 
     #endregion
 
+    #region Hovering
+
+    private void HoverToggle(bool hovering)
+    {
+        if (carIsHovering == hovering)
+            return;
+
+        carIsHovering = hovering;
+
+        if (hovering)
+        {
+            HoverOn();
+        }
+        else
+        {
+            HoverOff();
+        }
+    }
+
+    private void HoverOn()
+    {
+        carRB.drag = 0f;
+
+        // Visuals
+        PivotTires(true);
+    }
+
+    private void HoverOff()
+    {
+        carRB.drag = rbDrag;
+
+        // Visuals
+        PivotTires(false);
+    }
+
+    #endregion
+
     #region Power Sliding
 
     private void PowerSlideToggler(bool powerSliding)
@@ -164,17 +251,28 @@ public class SuShipController : MonoBehaviour
     {
         if (carIsPowerSliding)
         {
-            powerBoostChargeLevel += Mathf.Abs(powerBoostChargeSpeed * carSkidVelocityRatio * Time.deltaTime);
+            wheelStaticBuildupLevel += Mathf.Abs(wheelStaticBuildupSpeed * carSkidVelocityRatio * Time.deltaTime);
+            wheelStaticBuildupLevel = Mathf.Clamp01(wheelStaticBuildupLevel);
         }
 
-        if (carBoostTimer > 0)
+        if (carIsHovering)
         {
-            carBoostTimer -= Time.deltaTime;
+            float energyTransfer = Mathf.Min(powerBoostChargeSpeed * Time.deltaTime, wheelStaticBuildupLevel);
+            energyTransfer = Mathf.Clamp01(energyTransfer);
+
+            wheelStaticBuildupLevel -= energyTransfer;
+            wheelStaticBuildupLevel = Mathf.Clamp01(wheelStaticBuildupLevel);
+
+            powerBoostChargeLevel += energyTransfer;
+        }
+
+        if (!carIsHovering && powerBoostChargeLevel > 0)
+        {
             powerBoostChargeLevel -= powerBoostDepleteSpeed * Time.deltaTime;
         }
 
         powerBoostChargeLevel = Mathf.Clamp01(powerBoostChargeLevel);
-        Debug.Log("Power Boost Charge: " + powerBoostChargeLevel);
+        //Debug.Log("Wheel Static Buildup: " + wheelStaticBuildupLevel + "; Power Boost Charge: " + powerBoostChargeLevel + "; Hovering: " + carIsHovering);
     }
 
     #endregion
@@ -184,10 +282,16 @@ public class SuShipController : MonoBehaviour
     private void Visuals()
     {
         TireVisuals();
+        SetChargeMeters();
+        SetTireLightning();
+        AccelerationFOVEffects();
     }
 
     private void TireVisuals()
     {
+        if (carIsHovering)
+            return;
+
         float steeringAngle = steerInput * maxSteeringAngle;
 
         for(int i = 0; i < tireModels.Length; i++)
@@ -209,7 +313,74 @@ public class SuShipController : MonoBehaviour
 
     private void SetTirePosition(GameObject tire, Vector3 targetPosition)
     {
+        if (carIsHovering)
+            return;
+
         tire.transform.position = Vector3.Lerp(tire.transform.position, targetPosition, tirePositionLerpAmt);
+    }
+
+    private void PivotTires(bool pivot)
+    {
+        float angle = 0f;
+
+        if (pivot)
+            angle = 90f;
+
+        for(int i = 0; i < tirePivots.Length; i++)
+        {
+            if (i < 2)
+            {
+                // Left side wheels
+                tirePivots[i].transform.localEulerAngles = new Vector3(0, 0, -angle);
+            }
+            else
+            {
+                // Right side wheels
+                tirePivots[i].transform.localEulerAngles = new Vector3(0, 0, angle);
+            }
+        }
+    }
+
+    private void SetTireLightning()
+    {
+        for (int i = 0; i < tireLightnings.Length; i++)
+        {
+            if (wheelStaticBuildupLevel > 0)
+            {
+                tireLightnings[i].SetActive(true);
+                tireLightnings[i].transform.localScale = new Vector3(1, 1, wheelStaticBuildupLevel);
+            }
+            else
+            {
+                tireLightnings[i].SetActive(false);
+            }
+
+        }
+    }
+
+    private void SetChargeMeters()
+    {
+        for(int i = 0; i < chargeMeters.Length; i++)
+        {
+            if (powerBoostChargeLevel > 0)
+            {
+                chargeMeters[i].SetActive(true);
+                chargeMeters[i].transform.localScale = new Vector3(1, powerBoostChargeLevel, 1);
+            }
+            else
+            {
+                chargeMeters[i].SetActive(false);
+            }
+            
+        }
+    }
+
+    private void AccelerationFOVEffects()
+    {
+        float newFOV = baseCamFOV + (currentCarLocalAcceleration.z * FOVMultiplier * FOVSetting);
+        newFOV = Mathf.Clamp(newFOV, minFOV, maxFOV);
+
+        carCam.m_Lens.FieldOfView = Mathf.Lerp(carCam.m_Lens.FieldOfView, newFOV, 0.1f);
     }
 
     #endregion
@@ -237,7 +408,11 @@ public class SuShipController : MonoBehaviour
 
     private void CalculateCarVelocity()
     {
+        Vector3 previousCarLocalVelocity = currentCarLocalVelocity;
         currentCarLocalVelocity = transform.InverseTransformDirection(carRB.velocity);
+
+        currentCarLocalAcceleration = currentCarLocalVelocity - previousCarLocalVelocity;
+
         carVelocityRatio = currentCarLocalVelocity.z / maxSpeed;
         carSkidVelocityRatio = currentCarLocalVelocity.x / maxSpeed;
     }
@@ -267,17 +442,17 @@ public class SuShipController : MonoBehaviour
         steerInput = f;
     }
 
-    public void BoostInput(InputAction.CallbackContext context)
+    public void HoverInput(InputAction.CallbackContext context)
     {
         if (context.started)
         {
-            boostInput = 1f;
+            hoverInput = 1f;
             return;
         }
 
         if (context.canceled)
         {
-            boostInput = 0f;
+            hoverInput = 0f;
             return;
         }
     }
@@ -288,7 +463,6 @@ public class SuShipController : MonoBehaviour
 
     private void Suspension()
     {
-
         for (int i = 0; i < rayPoints.Length; i++)
         {
             RaycastHit hit;
