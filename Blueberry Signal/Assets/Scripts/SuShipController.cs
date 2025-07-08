@@ -22,6 +22,7 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private TrailRenderer[] rearSkidMarks = new TrailRenderer[2];
     [SerializeField] private ParticleSystem[] rearSkidSmokes = new ParticleSystem[2];
     [SerializeField] private CinemachineVirtualCamera carCam;
+    [SerializeField] private TireEffectsController[] tireEffects = new TireEffectsController[2];
 
     [Header("Suspension Settings")]
     [SerializeField] private float springStiffness;
@@ -60,6 +61,7 @@ public class SuShipController : MonoBehaviour
     private Vector3 currentCarLocalAcceleration = Vector3.zero;
     private float carVelocityRatio = 0;
     private float carSkidVelocityRatio = 0;
+    private float currentSteerStrength;
 
     [Header("Power Slide")]
     [SerializeField] private float wheelStaticBuildupSpeed = 0.2f;
@@ -73,6 +75,8 @@ public class SuShipController : MonoBehaviour
     private float powerBoostChargeLevel = 0f;
 
     [Header("Hovering")]
+    [SerializeField] float hoverSteerStrength = 25f;
+
     private bool carIsHovering = false;
 
     [Header("Visuals")]
@@ -94,6 +98,7 @@ public class SuShipController : MonoBehaviour
     {
         carRB = GetComponent<Rigidbody>();
         carRB.drag = rbDrag;
+        currentSteerStrength = steerStrength;
     }
 
     private void FixedUpdate()
@@ -141,9 +146,9 @@ public class SuShipController : MonoBehaviour
     private void Turn()
     {
         if (carIsHovering)
-            carRB.AddRelativeTorque(steerStrength * steerInput * carRB.transform.up, ForceMode.Acceleration);
+            carRB.AddRelativeTorque(currentSteerStrength * steerInput * carRB.transform.up, ForceMode.Acceleration);
         else
-            carRB.AddRelativeTorque(steerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * carRB.transform.up, ForceMode.Acceleration);
+            carRB.AddRelativeTorque(currentSteerStrength * steerInput * turningCurve.Evaluate(Mathf.Abs(carVelocityRatio)) * Mathf.Sign(carVelocityRatio) * carRB.transform.up, ForceMode.Acceleration);
     }
 
     private void Hover()
@@ -222,14 +227,22 @@ public class SuShipController : MonoBehaviour
     private void HoverOn()
     {
         carRB.drag = 0f;
+        currentSteerStrength = hoverSteerStrength;
+        carIsPowerSliding = false;
 
         // Visuals
         PivotTires(true);
+
+        for (int i = 0; i < tireEffects.Length; i++)
+        {
+            tireEffects[i].EnableMiniLightning(false);
+        }
     }
 
     private void HoverOff()
     {
         carRB.drag = rbDrag;
+        currentSteerStrength = steerStrength;
 
         // Visuals
         PivotTires(false);
@@ -245,6 +258,11 @@ public class SuShipController : MonoBehaviour
             return;
 
         carIsPowerSliding = powerSliding;
+
+        for (int i = 0; i < tireEffects.Length; i++)
+        {
+            tireEffects[i].EnableMiniLightning(powerSliding);
+        }
     }
 
     private void CalculatePowerSlide()
@@ -253,6 +271,21 @@ public class SuShipController : MonoBehaviour
         {
             wheelStaticBuildupLevel += Mathf.Abs(wheelStaticBuildupSpeed * carSkidVelocityRatio * Time.deltaTime);
             wheelStaticBuildupLevel = Mathf.Clamp01(wheelStaticBuildupLevel);
+        }
+
+        if (wheelStaticBuildupLevel == 1f)
+        {
+            for (int i = 0; i < tireEffects.Length; i++)
+            {
+                tireEffects[i].EnableClouds(true);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < tireEffects.Length; i++)
+            {
+                tireEffects[i].EnableClouds(false);
+            }
         }
 
         if (carIsHovering)
@@ -300,13 +333,13 @@ public class SuShipController : MonoBehaviour
 
             if (i < 2)
             {
-                tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * carVelocityRatio * Time.deltaTime, Space.Self);
+                tireModels[i].transform.GetChild(0).Rotate(Vector3.up, tireRotSpeed * carVelocityRatio * Time.deltaTime, Space.Self);
 
                 frontTireParents[i].transform.localEulerAngles = new Vector3(frontTireParents[i].transform.localEulerAngles.x, steeringAngle, frontTireParents[i].transform.localEulerAngles.x);
             }
             else
             {
-                tireModels[i].transform.Rotate(Vector3.right, tireRotSpeed * accelInput * Time.deltaTime, Space.Self);
+                tireModels[i].transform.GetChild(0).Rotate(Vector3.up, tireRotSpeed * accelInput * Time.deltaTime, Space.Self);
             }
         }
     }
