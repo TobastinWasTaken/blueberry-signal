@@ -19,10 +19,8 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private GameObject[] tirePivots = new GameObject[4];
     [SerializeField] private GameObject[] chargeMeters = new GameObject[2];
     [SerializeField] private GameObject[] tireLightnings = new GameObject[2];
-    [SerializeField] private TrailRenderer[] rearSkidMarks = new TrailRenderer[2];
-    [SerializeField] private ParticleSystem[] rearSkidSmokes = new ParticleSystem[2];
     [SerializeField] private CinemachineVirtualCamera carCam;
-    [SerializeField] private TireEffectsController[] tireEffects = new TireEffectsController[2];
+    [SerializeField] private TireEffectsController tireEffects;
 
     [Header("Suspension Settings")]
     [SerializeField] private float springStiffness;
@@ -44,12 +42,14 @@ public class SuShipController : MonoBehaviour
 
     [Header("Input")]
     private float accelInput = 0;
+    private float reverseInput = 0;
     private float steerInput = 0;
     private float hoverInput = 0;
 
     [Header("Car Settings")]
     [SerializeField] private float rbDrag = 0.2f;
     [SerializeField] private float acceleration = 25f;
+    [SerializeField] private float revAcceleration = 20f;
     [SerializeField] private float deceleration = 10f;
     [SerializeField] private float maxSpeed = 100f;
     [SerializeField] private float steerStrength = 15f;
@@ -68,9 +68,11 @@ public class SuShipController : MonoBehaviour
     [SerializeField] private float powerBoostChargeSpeed = 0.2f;
     [SerializeField] private float powerBoostDepleteSpeed = 0.5f;
     [SerializeField] private float powerBoostAcceleration = 10f;
+    [SerializeField] private float powerBoostDownForce = 10f;
     [SerializeField] private float boostRealignChargeThreshold = 0.15f;
 
     private bool carIsPowerSliding = false;
+    private bool carIsBoosting = false;
     private float wheelStaticBuildupLevel = 0f;
     private float powerBoostChargeLevel = 0f;
 
@@ -122,9 +124,10 @@ public class SuShipController : MonoBehaviour
             Acceleration();
             Deceleration();
             Turn();
-            Hover();
             SidewaysDrag();
         }
+
+        Hover();
     }
 
     private void Acceleration()
@@ -132,7 +135,10 @@ public class SuShipController : MonoBehaviour
         if (carIsHovering)
             return;
 
+        // Forward Acceleration
         carRB.AddForceAtPosition(acceleration * accelInput * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
+        // Backward Drag
+        carRB.AddForceAtPosition(deceleration * reverseInput * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
     }
 
     private void Deceleration()
@@ -140,7 +146,10 @@ public class SuShipController : MonoBehaviour
         if (carIsHovering)
             return;
 
+        // Forward Drag
         carRB.AddForceAtPosition(deceleration * accelInput * -transform.forward, accelerationPoint.position, ForceMode.Acceleration);
+        // Backward Acceleration
+        carRB.AddForceAtPosition(acceleration * reverseInput * -transform.forward, accelerationPoint.position, ForceMode.Acceleration);
     }
 
     private void Turn()
@@ -155,26 +164,38 @@ public class SuShipController : MonoBehaviour
     {
         HoverToggle(hoverInput == 1f);
 
-        if (!carIsHovering && powerBoostChargeLevel > 0)
+        if (!carIsHovering && powerBoostChargeLevel > 0 && isGrounded)
         {
-            if (powerBoostChargeLevel > boostRealignChargeThreshold)
+            // Velocity correction at the start of the boost
+            if (!carIsBoosting)
             {
-                // Re-orient the car's velocity if the charge level is greater than the threshold
-                Vector3 newVelocity = transform.forward;
-                float magnitude = currentCarLocalVelocity.magnitude;
+                if (powerBoostChargeLevel > boostRealignChargeThreshold)
+                {
+                    // Re-orient the car's velocity if the charge level is greater than the threshold
+                    Vector3 newVelocity = transform.forward;
+                    float magnitude = currentCarLocalVelocity.magnitude;
 
-                carRB.velocity = newVelocity * magnitude;
-            }
-            else if (currentCarLocalVelocity.z < 0)
-            {
-                // Zero out the z velocity if the car is moving relatively backwards
-                Vector3 newVelocity = currentCarLocalVelocity;
-                newVelocity.z = 0f;
+                    carRB.velocity = newVelocity * magnitude;
+                }
+                else if (currentCarLocalVelocity.z < 0)
+                {
+                    // Zero out the z velocity if the car is moving relatively backwards
+                    Vector3 newVelocity = currentCarLocalVelocity;
+                    newVelocity.z = 0f;
 
-                carRB.velocity = transform.TransformDirection(newVelocity);
+                    carRB.velocity = transform.TransformDirection(newVelocity);
+                }
+
+                carIsBoosting = true;
             }
 
             carRB.AddForceAtPosition(powerBoostAcceleration * transform.forward, accelerationPoint.position, ForceMode.Acceleration);
+            ApplyDownForce(powerBoostDownForce);
+        }
+
+        if (powerBoostChargeLevel <= 0)
+        {
+            carIsBoosting = false;
         }
     }
 
@@ -201,6 +222,13 @@ public class SuShipController : MonoBehaviour
         Vector3 dragForce = dragMagnitude * transform.right;
 
         carRB.AddForceAtPosition(dragForce, accelerationPoint.position, ForceMode.Acceleration);
+    }
+
+    private void ApplyDownForce(float force)
+    {
+        Vector3 downForce = new Vector3(0, -force, 0);
+
+        carRB.AddForceAtPosition(downForce, accelerationPoint.position, ForceMode.Acceleration);
     }
 
     #endregion
@@ -233,10 +261,7 @@ public class SuShipController : MonoBehaviour
         // Visuals
         PivotTires(true);
 
-        for (int i = 0; i < tireEffects.Length; i++)
-        {
-            tireEffects[i].EnableMiniLightning(false);
-        }
+        tireEffects.EnableMiniLightning(false);
     }
 
     private void HoverOff()
@@ -259,10 +284,7 @@ public class SuShipController : MonoBehaviour
 
         carIsPowerSliding = powerSliding;
 
-        for (int i = 0; i < tireEffects.Length; i++)
-        {
-            tireEffects[i].EnableMiniLightning(powerSliding);
-        }
+        tireEffects.EnableMiniLightning(powerSliding);
     }
 
     private void CalculatePowerSlide()
@@ -275,17 +297,11 @@ public class SuShipController : MonoBehaviour
 
         if (wheelStaticBuildupLevel == 1f)
         {
-            for (int i = 0; i < tireEffects.Length; i++)
-            {
-                tireEffects[i].EnableClouds(true);
-            }
+            tireEffects.EnableClouds(true);
         }
         else
         {
-            for (int i = 0; i < tireEffects.Length; i++)
-            {
-                tireEffects[i].EnableClouds(false);
-            }
+            tireEffects.EnableClouds(false);
         }
 
         if (carIsHovering)
@@ -297,9 +313,13 @@ public class SuShipController : MonoBehaviour
             wheelStaticBuildupLevel = Mathf.Clamp01(wheelStaticBuildupLevel);
 
             powerBoostChargeLevel += energyTransfer;
+
+            // Energy Transfer Visuals
+            if (wheelStaticBuildupLevel > 0)
+                tireEffects.SpawnArcTireToCharger();
         }
 
-        if (!carIsHovering && powerBoostChargeLevel > 0)
+        if (!carIsHovering && powerBoostChargeLevel > 0 && isGrounded)
         {
             powerBoostChargeLevel -= powerBoostDepleteSpeed * Time.deltaTime;
         }
@@ -316,7 +336,7 @@ public class SuShipController : MonoBehaviour
     {
         TireVisuals();
         SetChargeMeters();
-        SetTireLightning();
+        tireEffects.SetTireLightning(wheelStaticBuildupLevel);
         AccelerationFOVEffects();
     }
 
@@ -429,7 +449,7 @@ public class SuShipController : MonoBehaviour
             tempGroundedWheels += wheelsIsGrounded[i];
         }
 
-        if (tempGroundedWheels > 1)
+        if (tempGroundedWheels > 2)
         {
             isGrounded = true;
         }
@@ -465,6 +485,21 @@ public class SuShipController : MonoBehaviour
         if (context.canceled)
         {
             accelInput = 0f;
+            return;
+        }
+    }
+
+    public void ReverseInput(InputAction.CallbackContext context)
+    {
+        if (context.started)
+        {
+            reverseInput = 1f;
+            return;
+        }
+
+        if (context.canceled)
+        {
+            reverseInput = 0f;
             return;
         }
     }

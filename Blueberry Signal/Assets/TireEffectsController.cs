@@ -5,10 +5,14 @@ using UnityEngine;
 public class TireEffectsController : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] GameObject staticChargeMeter;
-    [SerializeField] GameObject staticChargeMinis;
-    [SerializeField] GameObject staticChargeClouds;
+    [SerializeField] private TrailRenderer[] rearSkidMarks = new TrailRenderer[2];
+    [SerializeField] private ParticleSystem[] rearSkidSmokes = new ParticleSystem[2];
+    [SerializeField] GameObject[] staticChargeMeter = new GameObject[2];
+    [SerializeField] GameObject[] staticChargeMinis = new GameObject[2];
+    [SerializeField] GameObject[] staticChargeClouds = new GameObject[2];
+    [SerializeField] GameObject[] chargeMeters = new GameObject[2];
     [SerializeField] Material staticChargeMiniMaterial;
+    [SerializeField] GameObject lightningArcPrefab;
 
     [Header("Mini Lightning")]
     [SerializeField] float miniLightningTimerMax = 0.8f;
@@ -41,14 +45,46 @@ public class TireEffectsController : MonoBehaviour
 
     #endregion
 
+    public void SetTireLightning(float staticChargeLevel)
+    {
+        for (int i = 0; i < staticChargeMeter.Length; i++)
+        {
+            if (staticChargeLevel > 0)
+            {
+                staticChargeMeter[i].SetActive(true);
+                staticChargeMeter[i].transform.localScale = new Vector3(1, 1, staticChargeLevel);
+            }
+            else
+            {
+                staticChargeMeter[i].SetActive(false);
+            }
+
+        }
+    }
+
     public void EnableMiniLightning(bool b)
     {
         if (b == miniLightningEnabled)
             return;
 
         miniLightningEnabled = b;
-        staticChargeMinis.SetActive(b);
+        
+        for (int i = 0; i < staticChargeMinis.Length; i++)
+        {
+            staticChargeMinis[i].SetActive(b);
+        }
+
         staticChargeMiniMaterial.SetTextureOffset("_MainTex", Vector2.zero);
+
+        // Skid smoke
+
+        for (int i = 0; i < rearSkidSmokes.Length; i++)
+        {
+            if (b)
+                rearSkidSmokes[i].Play();
+            else
+                rearSkidSmokes[i].Stop(true, ParticleSystemStopBehavior.StopEmitting);
+        }
     }
 
     public void EnableClouds(bool b)
@@ -57,7 +93,11 @@ public class TireEffectsController : MonoBehaviour
             return;
 
         cloudsEnabled = b;
-        staticChargeClouds.SetActive(b);
+
+        for (int i = 0; i < staticChargeClouds.Length; i++)
+        {
+            staticChargeClouds[i].SetActive(b);
+        }
     }
 
     private void AnimateMiniLightning()
@@ -80,5 +120,19 @@ public class TireEffectsController : MonoBehaviour
         staticChargeMiniMaterial.SetTextureOffset("_MainTex", offsetVec);
 
         miniLightningTimer -= Time.deltaTime;
+    }
+
+    public void SpawnArcTireToCharger()
+    {
+        for (int i = 0; i < staticChargeMeter.Length; i++)
+        {
+            GameObject arc = Instantiate(lightningArcPrefab);
+            LightningArcLogic logic = arc.GetComponent<LightningArcLogic>();
+
+            Vector3 startWorldPos = staticChargeMeter[i].transform.position;
+            Vector3 endWorldPos = chargeMeters[i].transform.position;
+
+            logic.SetPositions(startWorldPos + new Vector3(i, 0, 0), endWorldPos + new Vector3(i, 0, 0));
+        }
     }
 }
